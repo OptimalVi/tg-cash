@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    ports:
+      - "81:80"
+    volumes:
+      - ./src:/var/www/html:delegated
+    depends_on:
+      - php
+      - redis
+      - pgql
+    networks:
+      - backend
+
+  php:
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./src:/var/www/html:delegated
+    depends_on:
+      - redis
+      - pgql
+    networks:
+      - backend
+
+  pgql:
+    image: postgres:latest
+    restart: always
+    environment:
+      PGPASSWORD: '${DB_PASSWORD:-secret}'
+      POSTGRES_DB: '${DB_DATABASE}'
+      POSTGRES_USER: '${DB_USERNAME}'
+      POSTGRES_PASSWORD: '${DB_PASSWORD:-secret}'
+    ports:
+      - ${DB_PORT}:5432
+    volumes:
+      - ./.data/pgql:/var/lib/postgresql/data:delegated
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USERNAME} -h localhost || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:alpine
+    volumes:
+      - ./.data/redis:/data:delegated
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      retries: 3
+      timeout: 5s
+
+  telegram:
+    build:
+      context: ./
+      dockerfile: ./docker/node/Dockerfile
+    volumes:
+      - ./telegram:/usr/src/app
+      - ./.data/telegram:/var/logs/telegram:delegated
+    environment:
+      - TELEGRAM_TOKEN={TELEGRAM_BOT_TOKEN}
+    depends_on:
+      - php
+      - nginx
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
