@@ -29,6 +29,8 @@ class RouteServiceProvider extends ServiceProvider
         });
 
         $this->routes(function () {
+            Route::post(config('telegram.bots.main.webhook_path'), [TelegramBotController::class, 'main']);
+
             Route::middleware('api')
                 ->prefix('api')
                 ->group(base_path('routes/api.php'));
